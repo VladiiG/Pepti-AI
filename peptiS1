@@ -1,0 +1,294 @@
+import { useEffect, useRef, useState } from "react";
+import * as THREE from "three";
+
+function HexLogo({ size = 40 }) {
+  const s = size;
+  const cx = s / 2, cy = s / 2;
+  const pts = [
+    [cx, cy - s * 0.38],
+    [cx + s * 0.33, cy - s * 0.19],
+    [cx + s * 0.33, cy + s * 0.19],
+    [cx, cy + s * 0.38],
+    [cx - s * 0.33, cy + s * 0.19],
+    [cx - s * 0.33, cy - s * 0.19],
+  ];
+  return (
+    <svg width={s} height={s} viewBox={`0 0 ${s} ${s}`} fill="none">
+      {pts.map((p, i) => {
+        const next = pts[(i + 1) % pts.length];
+        return <line key={`l${i}`} x1={p[0]} y1={p[1]} x2={next[0]} y2={next[1]} stroke="#60A5FA" strokeWidth={s * 0.04} opacity="0.9" />;
+      })}
+      <line x1={pts[0][0]} y1={pts[0][1]} x2={pts[3][0]} y2={pts[3][1]} stroke="#93C5FD" strokeWidth={s * 0.025} opacity="0.35" />
+      <line x1={pts[1][0]} y1={pts[1][1]} x2={pts[4][0]} y2={pts[4][1]} stroke="#93C5FD" strokeWidth={s * 0.025} opacity="0.35" />
+      <line x1={pts[2][0]} y1={pts[2][1]} x2={pts[5][0]} y2={pts[5][1]} stroke="#93C5FD" strokeWidth={s * 0.025} opacity="0.35" />
+      {pts.map((p, i) => <circle key={`c${i}`} cx={p[0]} cy={p[1]} r={s * 0.07} fill="#60A5FA" />)}
+      <circle cx={cx} cy={cy} r={s * 0.09} fill="#3B82F6" />
+    </svg>
+  );
+}
+
+export default function PeptiAI() {
+  const mountRef = useRef(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const container = mountRef.current;
+    if (!container) return;
+    const W = container.clientWidth;
+    const H = container.clientHeight;
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x040c1a);
+    scene.fog = new THREE.FogExp2(0x040c1a, 0.055);
+
+    const camera = new THREE.PerspectiveCamera(52, W / H, 0.1, 100);
+    // Slightly closer than before — fills more screen while keeping black space
+    camera.position.set(0, 0.5, 11.2);
+    camera.lookAt(0, 0, 0);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(W, H);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    container.appendChild(renderer.domElement);
+
+    const helixGroup = new THREE.Group();
+    scene.add(helixGroup);
+
+    const N = 28;
+    const TURNS = 2.6;
+    const RAD = 2.05;   // wider than before (was 1.72)
+    const HGHT = 10.2;  // taller than before (was 8.4)
+
+    const makeStrand = (phase) => {
+      const pts = [];
+      for (let i = 0; i < N; i++) {
+        const t = i / (N - 1);
+        const angle = t * Math.PI * 2 * TURNS + phase;
+        const y = t * HGHT - HGHT / 2;
+        pts.push(new THREE.Vector3(RAD * Math.cos(angle), y, RAD * Math.sin(angle)));
+      }
+      return pts;
+    };
+
+    const s1 = makeStrand(0);
+    const s2 = makeStrand(Math.PI);
+
+    // --- BACKBONE TUBES ---
+    const strandMat = new THREE.MeshBasicMaterial({
+      color: 0x1a3a8f, transparent: true, opacity: 0.45,
+    });
+    [s1, s2].forEach(strand => {
+      const curve = new THREE.CatmullRomCurve3(strand, false, "catmullrom", 0.15);
+      const tube = new THREE.TubeGeometry(curve, 180, 0.042, 7, false);
+      helixGroup.add(new THREE.Mesh(tube, strandMat));
+    });
+
+    // --- NODES ---
+    const nodeColorsA = [0x3B82F6, 0x60A5FA, 0x818CF8, 0x3B82F6, 0x60A5FA, 0x818CF8];
+    const nodeSizes   = [0.14, 0.17, 0.13, 0.16, 0.13, 0.16];
+
+    [s1, s2].forEach((strand, si) => {
+      strand.forEach((pos, i) => {
+        const idx = (i + si * 3) % nodeColorsA.length;
+        const r = nodeSizes[idx];
+        const col = nodeColorsA[idx];
+
+        const outerHalo = new THREE.Mesh(
+          new THREE.SphereGeometry(r * 3.2, 12, 10),
+          new THREE.MeshBasicMaterial({
+            color: 0x0a1a3a, transparent: true, opacity: 0.38,
+            blending: THREE.NormalBlending, depthWrite: false,
+          })
+        );
+        outerHalo.position.copy(pos);
+        helixGroup.add(outerHalo);
+
+        const midGlow = new THREE.Mesh(
+          new THREE.SphereGeometry(r * 1.9, 12, 10),
+          new THREE.MeshBasicMaterial({
+            color: col, transparent: true, opacity: 0.07,
+            blending: THREE.AdditiveBlending, depthWrite: false,
+          })
+        );
+        midGlow.position.copy(pos);
+        helixGroup.add(midGlow);
+
+        const node = new THREE.Mesh(
+          new THREE.SphereGeometry(r, 14, 12),
+          new THREE.MeshBasicMaterial({ color: col })
+        );
+        node.position.copy(pos);
+        helixGroup.add(node);
+
+        const spec = new THREE.Mesh(
+          new THREE.SphereGeometry(r * 0.38, 8, 6),
+          new THREE.MeshBasicMaterial({
+            color: 0xdbeafe, transparent: true, opacity: 0.38,
+          })
+        );
+        spec.position.set(pos.x - r * 0.28, pos.y + r * 0.28, pos.z + r * 0.18);
+        helixGroup.add(spec);
+      });
+    });
+
+    // --- RUNGS ---
+    const rungMat = new THREE.LineBasicMaterial({
+      color: 0x60A5FA, transparent: true, opacity: 0.22,
+    });
+    for (let i = 0; i < N; i += 3) {
+      helixGroup.add(new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([s1[i], s2[i]]), rungMat
+      ));
+      const mid = new THREE.Vector3().addVectors(s1[i], s2[i]).multiplyScalar(0.5);
+      const midNode = new THREE.Mesh(
+        new THREE.SphereGeometry(0.05, 8, 6),
+        new THREE.MeshBasicMaterial({ color: 0x93C5FD, transparent: true, opacity: 0.5 })
+      );
+      midNode.position.copy(mid);
+      helixGroup.add(midNode);
+    }
+
+    // --- PARTICLES ---
+    const pCount = 180;
+    const pPos = new Float32Array(pCount * 3);
+    for (let i = 0; i < pCount; i++) {
+      pPos[i * 3]     = (Math.random() - 0.5) * 20;
+      pPos[i * 3 + 1] = (Math.random() - 0.5) * 16;
+      pPos[i * 3 + 2] = (Math.random() - 0.5) * 10;
+    }
+    const pGeo = new THREE.BufferGeometry();
+    pGeo.setAttribute("position", new THREE.BufferAttribute(pPos, 3));
+    scene.add(new THREE.Points(pGeo, new THREE.PointsMaterial({
+      color: 0x60A5FA, size: 0.022,
+      transparent: true, opacity: 0.18,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    })));
+
+    setTimeout(() => setVisible(true), 300);
+
+    let animId, time = 0;
+    const animate = () => {
+      animId = requestAnimationFrame(animate);
+      time += 0.005;
+      helixGroup.rotation.y = time * 0.25;
+      helixGroup.position.y = Math.sin(time * 0.32) * 0.15;
+      camera.position.x = Math.sin(time * 0.07) * 0.3;
+      camera.lookAt(0, 0, 0);
+      renderer.render(scene, camera);
+    };
+    animate();
+
+    const handleResize = () => {
+      if (!container) return;
+      const nW = container.clientWidth;
+      const nH = container.clientHeight;
+      camera.aspect = nW / nH;
+      camera.updateProjectionMatrix();
+      renderer.setSize(nW, nH);
+    };
+    window.addEventListener("resize", handleResize);
+
+    return () => {
+      cancelAnimationFrame(animId);
+      window.removeEventListener("resize", handleResize);
+      renderer.dispose();
+      if (container.contains(renderer.domElement)) container.removeChild(renderer.domElement);
+    };
+  }, []);
+
+  const fadeIn = (delay) => ({
+    opacity: visible ? 1 : 0,
+    transform: visible ? "translateY(0)" : "translateY(14px)",
+    transition: `opacity 1.1s ease ${delay}s, transform 1.1s ease ${delay}s`,
+  });
+
+  return (
+    <div style={{ position: "relative", width: "100%", height: "100vh", overflow: "hidden", background: "#040c1a" }}>
+      <div ref={mountRef} style={{ position: "absolute", inset: 0 }} />
+
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800;900&family=Inter:wght@300;400&display=swap');
+
+        @keyframes btnPulse {
+          0%   { box-shadow: 0 0 0 0px rgba(96,165,250,0.0); border-color: rgba(96,165,250,0.4); }
+          45%  { box-shadow: 0 0 0 10px rgba(96,165,250,0.10); border-color: rgba(96,165,250,0.85); }
+          75%  { box-shadow: 0 0 0 18px rgba(96,165,250,0.03); border-color: rgba(96,165,250,0.52); }
+          100% { box-shadow: 0 0 0 0px rgba(96,165,250,0.0); border-color: rgba(96,165,250,0.4); }
+        }
+        @keyframes subtitleGlow {
+          0%, 100% { text-shadow: 0 0 10px rgba(147,197,253,0.55), 0 0 24px rgba(96,165,250,0.22); }
+          50%       { text-shadow: 0 0 18px rgba(147,197,253,0.9), 0 0 38px rgba(96,165,250,0.4); }
+        }
+        .pepti-enter { animation: btnPulse 2.8s ease-in-out infinite; }
+        .pepti-enter:hover {
+          animation: none !important;
+          background: rgba(37,99,235,0.15) !important;
+          border-color: rgba(147,197,253,0.95) !important;
+          color: #DBEAFE !important;
+          cursor: pointer;
+        }
+        .pepti-sub { animation: subtitleGlow 3.4s ease-in-out infinite; }
+      `}</style>
+
+      <div style={{
+        position: "absolute", inset: 0,
+        display: "flex", flexDirection: "column",
+        alignItems: "center", justifyContent: "center",
+        pointerEvents: "none",
+      }}>
+        <div style={{ marginBottom: 22, ...fadeIn(0) }}>
+          <HexLogo size={40} />
+        </div>
+
+        <h1 style={{
+          color: "#FFFFFF",
+          fontSize: 52,
+          fontWeight: 800,
+          letterSpacing: "0.32em",
+          textIndent: "0.32em",
+          margin: 0,
+          fontFamily: "'Montserrat', 'Helvetica Neue', sans-serif",
+          textShadow: "0 0 40px rgba(37,99,235,0.45), 0 2px 8px rgba(0,0,0,0.95)",
+          ...fadeIn(0.35),
+        }}>
+          PEPTI AI
+        </h1>
+
+        <p className="pepti-sub" style={{
+          color: "#93C5FD",
+          fontSize: 11,
+          letterSpacing: "0.28em",
+          textIndent: "0.28em",
+          marginTop: 14,
+          marginBottom: 0,
+          fontWeight: 400,
+          fontFamily: "'Inter', 'Helvetica Neue', sans-serif",
+          ...fadeIn(0.65),
+        }}>
+          PEPTIDE CONSULTING
+        </p>
+
+        <div style={{ marginTop: 42, pointerEvents: "all", ...fadeIn(1.0) }}>
+          <button
+            className="pepti-enter"
+            style={{
+              background: "transparent",
+              border: "1px solid rgba(96,165,250,0.4)",
+              color: "#93C5FD",
+              padding: "14px 52px",
+              fontSize: 11,
+              letterSpacing: "0.28em",
+              textIndent: "0.28em",
+              fontFamily: "'Inter', 'Helvetica Neue', sans-serif",
+              fontWeight: 400,
+              borderRadius: 0,
+              transition: "background 0.3s ease, color 0.3s ease",
+            }}
+          >
+            BUILD YOUR PROTOCOL
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
