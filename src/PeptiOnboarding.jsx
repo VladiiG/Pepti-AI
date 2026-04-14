@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import * as THREE from "three";
+import PeptiQuiz from "./PeptiQuiz";
 
 // ─── Hex Logo (unchanged) ─────────────────────────────────────────────────────
 function HexLogo({ size = 40 }) {
@@ -370,6 +371,9 @@ export default function PeptiOnboarding() {
     firstName: "", lastName: "", phone: "", phoneCode: "+1",
     role: "", goal: "",
   });
+  const [ageDeclined, setAgeDeclined] = useState(false);
+  const [quizStarted, setQuizStarted] = useState(false);
+  const [quizAnswers, setQuizAnswers] = useState(null);
 
   // ── Three.js — mounted once, persists across all steps ──────────────────────
   useEffect(() => {
@@ -744,11 +748,112 @@ export default function PeptiOnboarding() {
       );
     })(),
 
-    // Step 3 — Quiz Intro
-    3: (
+    // Step 3 — Age Verification
+    3: (() => {
+      if (ageDeclined) {
+        return (
+          <div style={{ ...PANEL, maxWidth: 400 }}>
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: 22, ...fi(0) }}>
+              <HexLogo size={26} />
+            </div>
+            <h2 style={{ ...HEADING, ...fi(0.1) }}>THANK YOU</h2>
+            <p style={{
+              color: "rgba(147,197,253,0.55)",
+              fontSize: 12, lineHeight: 1.9,
+              textAlign: "center", margin: "18px 0 0",
+              fontFamily: "'Inter', sans-serif", fontWeight: 300,
+              letterSpacing: "0.04em",
+              ...fi(0.2),
+            }}>
+              Thank you for your honesty. Pepti AI protocol recommendations are only available for adults 21 and older.
+            </p>
+          </div>
+        );
+      }
+      return (
+        <div style={{ ...PANEL, maxWidth: 400 }}>
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: 22, ...fi(0) }}>
+            <HexLogo size={26} />
+          </div>
+          <h2 style={{ ...HEADING, ...fi(0.1) }}>ONE QUICK THING</h2>
+          <p style={{
+            color: "rgba(147,197,253,0.55)",
+            fontSize: 12, lineHeight: 1.9,
+            textAlign: "center", margin: "14px 0 32px",
+            fontFamily: "'Inter', sans-serif", fontWeight: 300,
+            letterSpacing: "0.04em",
+            ...fi(0.2),
+          }}>
+            To access your peptide protocol, we need to confirm your age.
+            Pepti AI is only available to adults 21 and older.
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 18, ...fi(0.3) }}>
+            <button
+              className="pepti-enter"
+              onClick={() => goTo(4)}
+              style={{
+                ...BTN,
+                marginTop: 0,
+                width: "100%",
+                background: "rgba(37,99,235,0.18)",
+                borderColor: "rgba(96,165,250,0.55)",
+                color: "#DBEAFE",
+                fontWeight: 600,
+              }}
+            >
+              I AM 21 OR OLDER
+            </button>
+            <button
+              onClick={() => setAgeDeclined(true)}
+              style={{
+                background: "none",
+                border: "none",
+                color: "rgba(226,232,240,0.6)",
+                fontSize: 10,
+                letterSpacing: "0.22em",
+                fontFamily: "'Inter', sans-serif",
+                fontWeight: 400,
+                cursor: "pointer",
+                padding: "4px 0",
+              }}
+            >
+              I AM UNDER 21
+            </button>
+          </div>
+        </div>
+      );
+    })(),
+
+    // Step 4 — Medical Disclaimer
+    4: (
+      <div style={{ ...PANEL, width: 420 }}>
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 18, ...fi(0.05) }}>
+          <HexLogo size={26} />
+        </div>
+        <h2 style={{ ...HEADING, fontSize: 17, ...fi(0.1) }}>BEFORE YOUR ASSESSMENT</h2>
+        <p style={{
+          color: "rgba(147,197,253,0.55)",
+          fontSize: 12, lineHeight: 1.9,
+          textAlign: "center", margin: "18px 0 30px",
+          fontFamily: "'Inter', sans-serif", fontWeight: 300,
+          letterSpacing: "0.04em",
+          ...fi(0.2),
+        }}>
+          Pepti AI provides educational information only. Nothing on this platform constitutes medical advice, diagnosis, or treatment. All protocol recommendations are for informational purposes only and must be reviewed with a licensed healthcare provider before use. By proceeding you acknowledge and accept these terms.
+        </p>
+        <div style={fi(0.32)}>
+          <button className="pepti-enter" onClick={() => goTo(5)} style={{ ...BTN, marginTop: 0, letterSpacing: "0.22em", fontSize: 9 }}>
+            I ACCEPT — BEGIN ASSESSMENT
+          </button>
+        </div>
+      </div>
+    ),
+
+    // Step 5 — Quiz Intro
+    5: (
       <div style={{ ...PANEL, width: 420 }}>
         <div style={fi(0)}>
-          <BackBtn onClick={() => goTo(2)} />
+          <BackBtn onClick={() => goTo(4)} />
           <StepDots current={3} />
         </div>
         <div style={{ display: "flex", justifyContent: "center", marginBottom: 18, ...fi(0.05) }}>
@@ -810,7 +915,7 @@ export default function PeptiOnboarding() {
         <div style={{ height: 1, background: "rgba(96,165,250,0.1)", margin: "20px 0 22px", ...fi(0.48) }} />
 
         <div style={fi(0.52)}>
-          <button className="pepti-enter" style={{ ...BTN, marginTop: 0 }}>
+          <button className="pepti-enter" onClick={() => setQuizStarted(true)} style={{ ...BTN, marginTop: 0 }}>
             BEGIN QUIZ →
           </button>
         </div>
@@ -819,6 +924,10 @@ export default function PeptiOnboarding() {
   };
 
   // ── Render ───────────────────────────────────────────────────────────────────
+  if (quizStarted) {
+    return <PeptiQuiz onComplete={(answers) => setQuizAnswers(answers)} />;
+  }
+
   return (
     <div style={{ position: "relative", width: "100%", height: "100vh", overflow: "hidden", background: "#040c1a" }}>
       {/* Three.js canvas — never unmounts */}
